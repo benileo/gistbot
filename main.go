@@ -1,12 +1,11 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"github.com/fsnotify/fsnotify"
 	"log"
 	"os"
 	"path/filepath"
-	"errors"
 )
 
 type GistDaemon struct {
@@ -15,13 +14,16 @@ type GistDaemon struct {
 	watcher *fsnotify.Watcher
 }
 
-func NewGistDaemon(rootDir string, watcher *fsnotify.Watcher) *GistDaemon {
-	return &GistDaemon{rootDir: rootDir, watcher: watcher}
+func NewGistDaemon(rootDir string) *GistDaemon {
+	return &GistDaemon{rootDir: rootDir}
 }
 
 func (gd *GistDaemon) findGists() ([]string, error) {
 	gitDirectories := make([]string, 0)
 	err := filepath.Walk(gd.rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 		if info.Name() == ".git" && info.IsDir() {
 			absPath, err := filepath.Abs(filepath.Dir(path))
 			if err != nil {
@@ -41,31 +43,58 @@ func (gd *GistDaemon) setGists() error {
 		return err
 	}
 	if len(gists) == 0 {
-		return errors.New("No gists were found")
+		return errors.New("No github gists were found")
 	}
 	gd.gists = gists
 	return nil
 }
 
-//func (gd *GistDaemon) SetupWatchers(){
-//
-//}
+func (gd *GistDaemon) createWatcher() error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	gd.watcher = watcher
+	return nil
+}
+
+func (gd *GistDaemon) addWatchers() error {
+	for _, dir := range gd.gists {
+		if err := gd.watcher.Add(dir); err != nil {
+			return err
+		}
+		log.Println("Setup watch on gist: ", dir)
+	}
+	return nil
+}
+
+func (gd *GistDaemon) Close() {
+	if gd.watcher != nil {
+		gd.watcher.Close()
+	}
+}
 
 func (gd *GistDaemon) Start() error {
 	if err := gd.setGists(); err != nil {
+		return err
+	}
+	if err := gd.createWatcher(); err != nil {
+		return err
+	}
+	if err := gd.addWatchers(); err != nil {
 		return err
 	}
 	return nil
 }
 
 func main() {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
+	ch := make(chan bool)
+
+	daemon := NewGistDaemon("/home/jammin/gists/kdjfd")
+	if err := daemon.Start(); err != nil {
 		log.Fatal(err)
 	}
-	defer watcher.Close()
+	defer daemon.Close()
 
-	daemon := NewGistDaemon("/home/jammin/gists", watcher)
-	daemon.Start()
-	fmt.Println(daemon.gists)
+	<-ch
 }
