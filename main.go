@@ -2,18 +2,31 @@ package main
 
 import (
 	"log"
+	"github.com/fsnotify/fsnotify"
 )
 
 func main() {
 	ch := make(chan bool)
 
-	daemon := NewGistDaemon("/home/jammin/gists",
-		NewGitControl("benileo", "home/jammin/.ssh/id_rsa.pub", "home/jammin/.ssh/id_rsa"))
-	if err := daemon.Start(); err != nil {
-		log.Fatal(err)
+	// load the config
+	conf := Config{RootDir: "/home/jammin/gists"}
 
+	// get the file paths of the gists
+	gists, err := findGists(conf.RootDir)
+	if err != nil {
+		log.Fatal(err)
 	}
-	defer daemon.Close()
+
+	// get the watcher
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// create and start the daemon
+	daemon := NewDaemon(conf, gists, watcher)
+	daemon.Start()
+	defer daemon.Stop()
 
 	<-ch
 }
