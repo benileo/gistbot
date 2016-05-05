@@ -13,6 +13,8 @@ func main() {
 		RootDir: "/home/jammin/gists",
 		PublicKey: "/home/jammin/.ssh/id_rsa.pub",
 		PrivateKey: "/home/jammin/.ssh/id_rsa",
+		Name: "Ben Irving",
+		Email: "jammin.irving@gmail.com",
 	}
 
 	// get the file paths of the gists

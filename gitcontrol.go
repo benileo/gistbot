@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"gopkg.in/libgit2/git2go.v23"
+	"errors"
+	"time"
 )
 
 type GitControl struct {
@@ -34,6 +36,24 @@ func (gc *GitControl) fetchOptions() *git.FetchOptions {
 	return &fo
 }
 
+func (gc *GitControl) pushOptions() *git.PushOptions {
+	po := git.PushOptions{
+		RemoteCallbacks: git.RemoteCallbacks{
+			CredentialsCallback:      gc.credentialsCallback,
+			CertificateCheckCallback: gc.certificateCheckCallback,
+		},
+	}
+	return &po
+}
+
+func (gc *GitControl) signature() *git.Signature {
+	return &git.Signature{
+		Name: gc.Conf.Name,
+		Email: gc.Conf.Email,
+		When: time.Now(),
+	}
+}
+
 func (gc *GitControl) PullAll() error {
 	for _, repo := range gc.Repos {
 		err := gc.PullOne(repo)
@@ -45,6 +65,89 @@ func (gc *GitControl) PullAll() error {
 
 	return nil
 }
+
+func (gc *GitControl) repoFromPath(path string) (*git.Repository, error) {
+	for _, repo := range gc.Repos {
+		fmt.Println(repo.Path()) // /.git/
+		fmt.Println(path)  // /.bash_aliases this comparison is not equal
+		if repo.Path() == path {
+			return repo, nil
+		}
+	}
+
+	return nil, errors.New("repo from path not found")
+}
+
+func (gc *GitControl) Update(path string) error {
+	fmt.Printf("Updating... %s\n", path)
+	repo, err := gc.repoFromPath(path)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Adding...")
+	tree, err := gc.Add(repo)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Committing...")
+	err = gc.Commit(tree, repo)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Done...")
+	return nil
+}
+
+func (gc *GitControl) Add(repo *git.Repository) (*git.Tree, error) {
+	index, err := repo.Index()
+	if err != nil {
+		return nil, err
+	}
+	err = index.AddAll([]string{}, git.IndexAddDefault, nil)
+	if err != nil {
+		return nil, err
+	}
+	treeId, err := index.WriteTreeTo(repo)
+	if err != nil {
+		return nil, err
+	}
+	err = index.Write()
+	if err != nil {
+		return nil, err
+	}
+	tree, err := repo.LookupTree(treeId)
+	if err != nil {
+		return nil, err
+	}
+	return tree, nil
+}
+
+func (gc *GitControl) createCommitMessage() string{
+	t := time.Now()
+	return fmt.Sprint("%s %s %s", t.Month(), t.Day(), t.Year())
+}
+
+func (gc *GitControl) Commit(tree *git.Tree, repo *git.Repository) (error) {
+	sig := gc.signature()
+	message := gc.createCommitMessage()
+	commitId, err := repo.CreateCommit("HEAD", sig, sig, message, tree)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("commit: %s", commitId)
+	remote, err := repo.Remotes.Lookup("origin")
+	if err != nil {
+		return err
+	}
+	err = remote.Push([]string{"refs/heads/master"}, gc.pushOptions())
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 
 // get a bit messy here
 func (gc *GitControl) PullOne(repo *git.Repository) error {

@@ -11,6 +11,8 @@ type Config struct {
 	PublicKey  string
 	PrivateKey string
 	Username   string
+	Name       string
+	Email      string
 }
 
 type Daemon struct {
@@ -58,7 +60,10 @@ func (d *Daemon) waitForEvents() {
 			switch event.Op {
 
 			case fsnotify.Write:
-				log.Printf("Write! %s", event.Name)
+				// todo: changes to the .git directory should not be updated.
+				if err := d.GitControl.Update(event.Name); err != nil {
+					fmt.Errorf("error updating repo: %v", err)
+				}
 			}
 
 		/* errors */
