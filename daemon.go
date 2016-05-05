@@ -7,26 +7,36 @@ import (
 )
 
 type Config struct {
-	RootDir string
+	RootDir    string
+	PublicKey  string
+	PrivateKey string
+	Username   string
 }
 
 type Daemon struct {
-	Conf    Config
-	Gists   []string
-	Watcher *fsnotify.Watcher
+	Conf       Config
+	Gists      []string
+	Watcher    *fsnotify.Watcher
+	GitControl *GitControl
 }
 
-func NewDaemon(conf Config, gists []string, watcher *fsnotify.Watcher) (*Daemon) {
-	return &Daemon{Conf: conf, Gists: gists, Watcher: watcher}
+func NewDaemon(conf Config, gists []string, watcher *fsnotify.Watcher, gitcontrol *GitControl) *Daemon {
+	return &Daemon{Conf: conf, Gists: gists, Watcher: watcher, GitControl: gitcontrol}
 }
 
 func (d *Daemon) Stop() {
 	d.Watcher.Close()
 }
 
-func (d *Daemon) Start() {
+func (d *Daemon) Start() error {
+	err := d.GitControl.PullAll()
+	if err != nil {
+		return err
+	}
 	d.addWatchers()
 	go d.waitForEvents()
+
+	return nil
 }
 
 func (d *Daemon) addWatchers() {

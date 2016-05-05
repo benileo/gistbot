@@ -3,7 +3,11 @@ package main
 import (
     "path/filepath"
     "os"
+    "gopkg.in/libgit2/git2go.v23"
+    "log"
 )
+// todo: find a good home for these functions.
+
 
 func findGists(rootDir string) ([]string, error) {
 	gitDirectories := make([]string, 0)
@@ -25,4 +29,20 @@ func findGists(rootDir string) ([]string, error) {
 	})
 
 	return gitDirectories, err
+}
+
+func createRepos(gists []string) ([]*git.Repository, error) {
+    repos := make([]*git.Repository, 0)
+
+    for _, repo := range gists {
+        repo, err := git.OpenRepository(repo)
+        if err != nil {
+            log.Printf("unable to open repo with path %s: %v", repo, err)
+            continue
+        }
+
+        repos = append(repos, repo)
+    }
+
+    return repos, nil //todo: should we return an error if we are not able to open a repository or just log?
 }
