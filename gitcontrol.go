@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/cloudflare/cfssl/signer/remote"
 	"gopkg.in/libgit2/git2go.v23"
 	"log"
 	"time"
@@ -48,96 +47,6 @@ func (gc *GitControl) pushOptions() *git.PushOptions {
 	return &po
 }
 
-func (gc *GitControl) signature() *git.Signature {
-	return &git.Signature{
-		Name:  gc.Conf.Name,
-		Email: gc.Conf.Email,
-		When:  time.Now(),
-	}
-}
-
-func (gc *GitControl) repoFromPath(path string) (*git.Repository, error) {
-	for _, repo := range gc.Repos {
-		fmt.Println(repo.Path()) // /.git/
-		fmt.Println(path)        // /.bash_aliases this comparison is not equal
-		if repo.Path() == path {
-			return repo, nil
-		}
-	}
-
-	return nil, errors.New("repo from path not found")
-}
-
-func (gc *GitControl) Update(path string) error {
-	fmt.Printf("Updating... %s\n", path)
-	repo, err := gc.repoFromPath(path)
-	if err != nil {
-		return err
-	}
-	fmt.Println("Adding...")
-	tree, err := gc.Add(repo)
-	if err != nil {
-		return err
-	}
-	fmt.Println("Committing...")
-	err = gc.Commit(tree, repo)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Done...")
-	return nil
-}
-
-func (gc *GitControl) Add(repo *git.Repository) (*git.Tree, error) {
-	index, err := repo.Index()
-	if err != nil {
-		return nil, err
-	}
-	err = index.AddAll([]string{}, git.IndexAddDefault, nil)
-	if err != nil {
-		return nil, err
-	}
-	treeId, err := index.WriteTreeTo(repo)
-	if err != nil {
-		return nil, err
-	}
-	err = index.Write()
-	if err != nil {
-		return nil, err
-	}
-	tree, err := repo.LookupTree(treeId)
-	if err != nil {
-		return nil, err
-	}
-	return tree, nil
-}
-
-func (gc *GitControl) createCommitMessage() string {
-	t := time.Now()
-	return fmt.Sprint("%s %s %s", t.Month(), t.Day(), t.Year())
-}
-
-func (gc *GitControl) Commit(tree *git.Tree, repo *git.Repository) error {
-	sig := gc.signature()
-	message := gc.createCommitMessage()
-	commitId, err := repo.CreateCommit("HEAD", sig, sig, message, tree)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("commit: %s", commitId)
-	remote, err := repo.Remotes.Lookup("origin")
-	if err != nil {
-		return err
-	}
-	err = remote.Push([]string{"refs/heads/master"}, gc.pushOptions())
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (gc *GitControl) PullAll() {
 	ch := make(chan error)
 
@@ -158,7 +67,7 @@ func (gc *GitControl) Origin(repo *git.Repository) (*git.Remote, error) {
 	remote, err := repo.Remotes.Lookup("origin")
 	if err != nil {
 		fmt.Errorf("error looking up origin: %v", err)
-		return err, nil
+		return nil, err
 	}
 
 	return remote, nil
@@ -174,8 +83,36 @@ func (gc *GitControl) Master(repo *git.Repository) (*git.Reference, error) {
 	return master, nil
 }
 
-func (gc *GitControl) FastForward() {
+func (gc *GitControl) FastForward(repo *git.Repository, oid *git.Oid) error{
+	head, err := repo.Head()
+	if err != nil {
+		return fmt.Errorf("error getting HEAD: %v", err)
+	}
 
+	// Lookup the git tree object for the given ref
+	remoteTree, err := repo.LookupTree(oid)
+	if err != nil {
+		return fmt.Errorf("error lookup tree HEAD: %v", err)
+	}
+
+	// Honestly, don't fully understand this one
+	if err := repo.CheckoutTree(remoteTree, nil); err != nil {
+		return err
+	}
+
+	// lookup local master branch
+	branchRef, err := repo.References.Lookup("refs/heads/master")
+	if err != nil {
+		return fmt.Errorf("unable to lookup refs/heads/master: %v", err)
+	}
+
+	// Point branch to the object (don't fully understand this one too
+	branchRef.SetTarget(oid, "")
+	if _, err := head.SetTarget(oid, ""); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (gc *GitControl) Fetch(repo *git.Repository) error {
@@ -201,19 +138,20 @@ func (gc *GitControl) Merge(repo *git.Repository) error {
 	annotatedCommit, _ := repo.AnnotatedCommitFromRef(masterRemote)
 	mergeHeads := []*git.AnnotatedCommit{annotatedCommit}
 	analysis, _, _ := repo.MergeAnalysis(mergeHeads)
-	head, _ := repo.Head()
 
 	if analysis & git.MergeAnalysisUpToDate != 0 {
-		// Everything is up to date
+		log.Println("Everything up to date")
 
 		return nil
 	} else if analysis & git.MergeAnalysisFastForward != 0 {
 		// Fast forward
 
-		if err = gc.FastForward(); err != nil {
+		if err = gc.FastForward(repo, target); err != nil {
 			return err
 		}
 	}
+
+	return nil
 }
 
 func (gc *GitControl) PullOne(repo *git.Repository, ch chan error) {
@@ -231,92 +169,141 @@ func (gc *GitControl) PullOne(repo *git.Repository, ch chan error) {
 }
 
 
-	////mergeHeads := make([]*git.AnnotatedCommit, 1)
-	////mergeHeads[0] = annotatedCommit
-	////analysis, _, err := repo.MergeAnalysis(mergeHeads)
-	////if err != nil {
-	////	return err
-	////}
-    //
-	////head, err := repo.Head()
-	////if err != nil {
-	////	return err
-	////}
-    //
-	//// everything is up to date.
-	//if analysis&git.MergeAnalysisUpToDate != 0 {
-	//	return nil
-	//} else if analysis&git.MergeAnalysisFastForward != 0 {
-	//	// Fast-forward changes
-	//	// Get remote tree
-	//	remoteTree, err := repo.LookupTree(remoteBranchID)
-	//	if err != nil {
-	//		return err
-	//	}
-    //
-	//	// Checkout
-	//	if err := repo.CheckoutTree(remoteTree, nil); err != nil {
-	//		return err
-	//	}
-    //
-	//	branchRef, err := repo.References.Lookup("refs/heads/master")
-	//	if err != nil {
-	//		return err
-	//	}
-    //
-	//	// Point branch to the object
-	//	branchRef.SetTarget(remoteBranchID, "")
-	//	if _, err := head.SetTarget(remoteBranchID, ""); err != nil {
-	//		return err
-	//	}
-	//}
-	////todo: conflict not dealt with
-	////else if analysis & git.MergeAnalysisNormal != 0 {
-	////    // Just merge changes
-	////    if err := repo.Merge([]*git.AnnotatedCommit{annotatedCommit}, nil, nil); err != nil {
-	////        return err
-	////    }
-	////    // Check for conflicts
-	////    index, err := repo.Index()
-	////    if err != nil {
-	////        return err
-	////    }
-	////
-	////    if index.HasConflicts() {
-	////        return errors.New("Conflicts encountered. Please resolve them.")
-	////    }
-	////
-	////    // Make the merge commit
-	////    sig, err := repo.DefaultSignature()
-	////    if err != nil {
-	////        return err
-	////    }
-	////
-	////    // Get Write Tree
-	////    treeId, err := index.WriteTree()
-	////    if err != nil {
-	////        return err
-	////    }
-	////
-	////    tree, err := repo.LookupTree(treeId)
-	////    if err != nil {
-	////        return err
-	////    }
-	////
-	////    localCommit, err := repo.LookupCommit(head.Target())
-	////    if err != nil {
-	////        return err
-	////    }
-	////
-	////    remoteCommit, err := repo.LookupCommit(remoteBranchID)
-	////    if err != nil {
-	////        return err
-	////    }
-	////
-	////    repo.CreateCommit("HEAD", sig, sig, "", tree, localCommit, remoteCommit)
-	////
-	////    // Clean up
-	////    repo.StateCleanup()
-	////}
-    //
-	//return nil
+//func (gc *GitControl) signature() *git.Signature {
+//	return &git.Signature{
+//		Name:  gc.Conf.Name,
+//		Email: gc.Conf.Email,
+//		When:  time.Now(),
+//	}
+//}
+//
+//func (gc *GitControl) repoFromPath(path string) (*git.Repository, error) {
+//	for _, repo := range gc.Repos {
+//		fmt.Println(repo.Path()) // /.git/
+//		fmt.Println(path)        // /.bash_aliases this comparison is not equal
+//		if repo.Path() == path {
+//			return repo, nil
+//		}
+//	}
+//
+//	return nil, errors.New("repo from path not found")
+//}
+//
+//func (gc *GitControl) Update(path string) error {
+//	fmt.Printf("Updating... %s\n", path)
+//	repo, err := gc.repoFromPath(path)
+//	if err != nil {
+//		return err
+//	}
+//	fmt.Println("Adding...")
+//	tree, err := gc.Add(repo)
+//	if err != nil {
+//		return err
+//	}
+//	fmt.Println("Committing...")
+//	err = gc.Commit(tree, repo)
+//	if err != nil {
+//		return err
+//	}
+//
+//	fmt.Println("Done...")
+//	return nil
+//}
+//
+//func (gc *GitControl) Add(repo *git.Repository) (*git.Tree, error) {
+//	index, err := repo.Index()
+//	if err != nil {
+//		return nil, err
+//	}
+//	err = index.AddAll([]string{}, git.IndexAddDefault, nil)
+//	if err != nil {
+//		return nil, err
+//	}
+//	treeId, err := index.WriteTreeTo(repo)
+//	if err != nil {
+//		return nil, err
+//	}
+//	err = index.Write()
+//	if err != nil {
+//		return nil, err
+//	}
+//	tree, err := repo.LookupTree(treeId)
+//	if err != nil {
+//		return nil, err
+//	}
+//	return tree, nil
+//}
+//
+//func (gc *GitControl) createCommitMessage() string {
+//	t := time.Now()
+//	return fmt.Sprint("%s %s %s", t.Month(), t.Day(), t.Year())
+//}
+//
+//func (gc *GitControl) Commit(tree *git.Tree, repo *git.Repository) error {
+//	sig := gc.signature()
+//	message := gc.createCommitMessage()
+//	commitId, err := repo.CreateCommit("HEAD", sig, sig, message, tree)
+//	if err != nil {
+//		return err
+//	}
+//	fmt.Printf("commit: %s", commitId)
+//	remote, err := repo.Remotes.Lookup("origin")
+//	if err != nil {
+//		return err
+//	}
+//	err = remote.Push([]string{"refs/heads/master"}, gc.pushOptions())
+//	if err != nil {
+//		return err
+//	}
+//
+//	return nil
+//}
+
+////todo: conflict not dealt with
+////else if analysis & git.MergeAnalysisNormal != 0 {
+////    // Just merge changes
+////    if err := repo.Merge([]*git.AnnotatedCommit{annotatedCommit}, nil, nil); err != nil {
+////        return err
+////    }
+////    // Check for conflicts
+////    index, err := repo.Index()
+////    if err != nil {
+////        return err
+////    }
+////
+////    if index.HasConflicts() {
+////        return errors.New("Conflicts encountered. Please resolve them.")
+////    }
+////
+////    // Make the merge commit
+////    sig, err := repo.DefaultSignature()
+////    if err != nil {
+////        return err
+////    }
+////
+////    // Get Write Tree
+////    treeId, err := index.WriteTree()
+////    if err != nil {
+////        return err
+////    }
+////
+////    tree, err := repo.LookupTree(treeId)
+////    if err != nil {
+////        return err
+////    }
+////
+////    localCommit, err := repo.LookupCommit(head.Target())
+////    if err != nil {
+////        return err
+////    }
+////
+////    remoteCommit, err := repo.LookupCommit(remoteBranchID)
+////    if err != nil {
+////        return err
+////    }
+////
+////    repo.CreateCommit("HEAD", sig, sig, "", tree, localCommit, remoteCommit)
+////
+////    // Clean up
+////    repo.StateCleanup()
+////}

@@ -31,10 +31,11 @@ func (d *Daemon) Stop() {
 }
 
 func (d *Daemon) Start() error {
-	err := d.GitControl.PullAll()
-	if err != nil {
-		return err
-	}
+	d.GitControl.PullAll()
+	//err := d.GitControl.PullAll() todo: this should probabaly return something..
+	//if err != nil {
+	//	return err
+	//}
 	d.addWatchers()
 	go d.waitForEvents()
 
