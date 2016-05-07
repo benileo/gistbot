@@ -2,8 +2,16 @@ package main
 
 import (
 	"log"
-	"github.com/fsnotify/fsnotify"
 )
+
+type Config struct {
+	RootDir    string
+	PublicKey  string
+	PrivateKey string
+	Username   string
+	Name       string
+	Email      string
+}
 
 func main() {
 	ch := make(chan bool)
@@ -17,32 +25,15 @@ func main() {
 		Email: "jammin.irving@gmail.com",
 	}
 
-	// get the file paths of the gists
-	gists, err := findGists(conf.RootDir)
+	bot, err := NewBot(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// get the watcher
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
+	if err = bot.Start(); err != nil {
 		log.Fatal(err)
 	}
-
-	// set up git control
-	repos, err := createRepos(gists)
-	if err != nil {
-		log.Fatal(err)
-	}
-	gitcontrol := NewGitControl(conf, repos)
-
-	// create and start the daemon
-	daemon := NewDaemon(conf, gists, watcher, gitcontrol)
-	err = daemon.Start()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer daemon.Stop()
+	defer bot.Stop()
 
 	<-ch
 }
