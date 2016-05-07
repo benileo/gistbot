@@ -51,6 +51,7 @@ func (w *Watcher) Watch(events chan string, errors chan error) {
 
 			case fsnotify.Write:
 				if !w.isReservedGitPath(event.Name) {
+					log.Printf("save: %s", event.Name)
 					events <- event.Name
 				}
 			}
@@ -63,7 +64,7 @@ func (w *Watcher) Watch(events chan string, errors chan error) {
 }
 
 func (w *Watcher) isReservedGitPath(path string) bool {
-	exp, _ := regexp.Compile(`/\.git.*`)
+	exp, _ := regexp.Compile(`/\.git.*|.*.swp`)
 
 	return exp.MatchString(path)
 }

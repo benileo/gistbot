@@ -18,8 +18,8 @@ type Bot struct {
 func NewBot(conf Config) (*Bot, error) {
 	bot := Bot{
 		conf:   conf,
-		events: make(chan string),
-		errors: make(chan error),
+		events: make(chan string, 3),
+		errors: make(chan error, 2),
 	}
 	bot.finder = NewFinder(conf)
 
@@ -43,7 +43,7 @@ func (b *Bot) Start() error {
 		log.Println(err)
 	}
 
-    // Watch and Listen in seperate go routines
+    // Watch and Listen in separate go routines
     go b.listenForChanges()
     go b.watcher.Watch(b.events, b.errors)
 
@@ -64,8 +64,6 @@ func (b *Bot) paths() error {
 	if err != nil {
 		return fmt.Errorf("error finding repos %v", err)
 	}
-
-	fmt.Println(repos)
 	b.repos = repos
 
 	return nil
@@ -98,17 +96,21 @@ func (b *Bot) pullAll() {
 }
 
 func (b *Bot) listenForChanges() {
-    select {
+	log.Println("listening for changes...")
+	for {
+		select {
 
-    case changedFile := <- b.events :
-        if err := b.updateRepository(changedFile); err != nil {
-            log.Printf("error opening the repository %s: %v", changedFile, err)
-        }
+		case changedFile := <-b.events:
+			if err := b.updateRepository(changedFile); err != nil {
+				log.Printf("error updating the repository %s: %v", changedFile, err)
+			}
+			log.Printf("repository updated")
 
 
-    case err := <- b.errors :
-        log.Printf("error from the watcher: %v", err)
-    }
+		case err := <-b.errors:
+			log.Printf("error from the watcher: %v", err)
+		}
+	}
 }
 
 func (b *Bot) updateRepository(changedFile string) (error) {
@@ -128,7 +130,7 @@ func (b *Bot) updateRepository(changedFile string) (error) {
     }
 
     if err = repo.Commit(tree); err != nil {
-        return fmt.Errorf("error git commit: %v", err)
+        return err
     }
 
     if err = repo.Push(); err != nil {

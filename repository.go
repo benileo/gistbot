@@ -54,9 +54,15 @@ func (r *Repository) Commit(tree *git.Tree) error {
 		Email: r.conf.Email,
 		When:  time.Now(),
 	}
-	var message string = "Committed by the Gist Daemon"
+	var message string = "Committed by the Gist Bot"
+	head, _ := r.head()
 
-	commitId, err := r.repo.CreateCommit("refs/heads/master", sig, sig, message, tree)
+	commitTarget, err := r.repo.LookupCommit(head.Target())
+	if err != nil {
+		return fmt.Errorf("error looking up commit on local head: %v", err)
+	}
+
+	commitId, err := r.repo.CreateCommit("refs/heads/master", sig, sig, message, tree, commitTarget)
 	if err != nil {
 		return fmt.Errorf("error creating commit: %v", err)
 	}
@@ -139,7 +145,7 @@ func (r *Repository) origin() (*git.Remote, error) {
 	return remote, nil
 }
 
-func (r *Repository) master() (*git.Reference, error) {
+func (r *Repository) masterRemote() (*git.Reference, error) {
 	master, err := r.repo.References.Lookup("refs/remotes/origin/master") // remote master..
 	if err != nil {
 		fmt.Errorf("error looking up master branch: %v", err)
@@ -150,10 +156,7 @@ func (r *Repository) master() (*git.Reference, error) {
 }
 
 func (r *Repository) fastForward(oid *git.Oid) error {
-	head, err := r.repo.Head()
-	if err != nil {
-		return fmt.Errorf("error getting HEAD: %v", err)
-	}
+	head, _ := r.head()
 
 	// Lookup the git tree object for the given ref
 	remoteTree, err := r.repo.LookupTree(oid)
@@ -195,7 +198,7 @@ func (r *Repository) fetch() error {
 }
 
 func (r *Repository) merge() error {
-	masterRemote, err := r.master()
+	masterRemote, err := r.masterRemote()
 	if err != nil {
 		return err
 	}
@@ -218,4 +221,13 @@ func (r *Repository) merge() error {
 	}
 
 	return nil
+}
+
+func (r *Repository) head() (*git.Reference, error) {
+	head, err := r.repo.Head()
+	if err != nil {
+		return nil, fmt.Errorf("error getting HEAD: %v", err)
+	}
+
+	return head, nil
 }
