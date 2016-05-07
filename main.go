@@ -18,11 +18,11 @@ func main() {
 
 	// load the config
 	conf := Config{
-		RootDir: "/home/jammin/gists",
-		PublicKey: "/home/jammin/.ssh/id_rsa.pub",
+		RootDir:    "/home/jammin/gists",
+		PublicKey:  "/home/jammin/.ssh/id_rsa.pub",
 		PrivateKey: "/home/jammin/.ssh/id_rsa",
-		Name: "Ben Irving",
-		Email: "jammin.irving@gmail.com",
+		Name:       "Ben Irving",
+		Email:      "jammin.irving@gmail.com",
 	}
 
 	bot, err := NewBot(conf)

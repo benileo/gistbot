@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
-    "path/filepath"
+	"path/filepath"
 )
 
 type Bot struct {
@@ -43,9 +43,9 @@ func (b *Bot) Start() error {
 		log.Println(err)
 	}
 
-    // Watch and Listen in separate go routines
-    go b.listenForChanges()
-    go b.watcher.Watch(b.events, b.errors)
+	// Watch and Listen in separate go routines
+	go b.listenForChanges()
+	go b.watcher.Watch(b.events, b.errors)
 
 	return nil
 }
@@ -106,36 +106,35 @@ func (b *Bot) listenForChanges() {
 			}
 			log.Printf("repository updated")
 
-
 		case err := <-b.errors:
 			log.Printf("error from the watcher: %v", err)
 		}
 	}
 }
 
-func (b *Bot) updateRepository(changedFile string) (error) {
-    dirPath, err := filepath.Abs(filepath.Dir(changedFile))
-    if err != nil {
-        return err
-    }
+func (b *Bot) updateRepository(changedFile string) error {
+	dirPath, err := filepath.Abs(filepath.Dir(changedFile))
+	if err != nil {
+		return err
+	}
 
-    repo, err := NewRepository(b.conf, dirPath)
-    if err != nil {
-        return err
-    }
+	repo, err := NewRepository(b.conf, dirPath)
+	if err != nil {
+		return err
+	}
 
-    tree, err := repo.Add()
-    if err != nil {
-        return fmt.Errorf("error git add: %v", err)
-    }
+	tree, err := repo.Add()
+	if err != nil {
+		return fmt.Errorf("error git add: %v", err)
+	}
 
-    if err = repo.Commit(tree); err != nil {
-        return err
-    }
+	if err = repo.Commit(tree); err != nil {
+		return err
+	}
 
-    if err = repo.Push(); err != nil {
-        return fmt.Errorf("error git push: %v", err)
-    }
+	if err = repo.Push(); err != nil {
+		return fmt.Errorf("error git push: %v", err)
+	}
 
-    return nil
+	return nil
 }

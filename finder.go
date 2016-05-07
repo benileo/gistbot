@@ -1,29 +1,28 @@
-
 package main
 
 import (
-    "path/filepath"
-    "os"
+	"os"
+	"path/filepath"
 )
 
 type Finder struct {
-    conf Config
+	conf Config
 }
 
-func NewFinder(conf Config) (*Finder){
-    return &Finder{conf: conf}
+func NewFinder(conf Config) *Finder {
+	return &Finder{conf: conf}
 }
 
 func (f *Finder) Find() ([]string, error) {
-    // Leave room to hook into multiple directories or other config options
-    return f.find(f.conf.RootDir)
+	// Leave room to hook into multiple directories or other config options
+	return f.find(f.conf.RootDir)
 }
 
 func (f *Finder) find(rootDir string) ([]string, error) {
-    gitDirectories := make([]string, 0)
+	gitDirectories := make([]string, 0)
 
-    err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-        if err != nil {
+	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
 			return err
 		}
 		if info.Name() == ".git" && info.IsDir() {
