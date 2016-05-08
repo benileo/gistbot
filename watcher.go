@@ -29,7 +29,7 @@ func (w *Watcher) AddWatches(paths []string) []error {
 		}
 	}
 
-	return nil
+	return errors
 }
 
 func (w *Watcher) Add(path string) error {
