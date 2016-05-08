@@ -8,11 +8,11 @@ import (
 )
 
 type Watcher struct {
-	Conf    Config
+	Conf    *Config
 	Watcher *fsnotify.Watcher
 }
 
-func NewWatcher(conf Config) (*Watcher, error) {
+func NewWatcher(conf *Config) (*Watcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("error creating watcher: %v", err)

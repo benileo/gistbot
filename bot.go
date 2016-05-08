@@ -9,13 +9,13 @@ import (
 type Bot struct {
 	finder  *Finder
 	watcher *Watcher
-	conf    Config
+	conf    *Config
 	repos   []string
 	events  chan string
 	errors  chan error
 }
 
-func NewBot(conf Config) (*Bot, error) {
+func NewBot(conf *Config) (*Bot, error) {
 	bot := Bot{
 		conf:   conf,
 		events: make(chan string, 3),

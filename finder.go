@@ -6,10 +6,10 @@ import (
 )
 
 type Finder struct {
-	conf Config
+	conf *Config
 }
 
-func NewFinder(conf Config) *Finder {
+func NewFinder(conf *Config) *Finder {
 	return &Finder{conf: conf}
 }
 

@@ -8,11 +8,11 @@ import (
 )
 
 type Repository struct {
-	conf Config
+	conf *Config
 	repo *git.Repository
 }
 
-func NewRepository(conf Config, path string) (*Repository, error) {
+func NewRepository(conf *Config, path string) (*Repository, error) {
 	repo, err := git.OpenRepository(path)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create repository: %v", err)
