@@ -64,7 +64,7 @@ int _go_git_diff_foreach(git_diff *diff, int eachFile, int eachHunk, int eachLin
 		lcb = (git_diff_line_cb)&diffForEachLineCb;
 	}
 
-	return git_diff_foreach(diff, fcb, hcb, lcb, payload);
+	return git_diff_foreach(diff, fcb, NULL, hcb, lcb, payload);
 }
 
 int _go_git_diff_blobs(git_blob *old, const char *old_path, git_blob *new, const char *new_path, git_diff_options *opts, int eachFile, int eachHunk, int eachLine, void *payload)
@@ -85,7 +85,7 @@ int _go_git_diff_blobs(git_blob *old, const char *old_path, git_blob *new, const
 		lcb = (git_diff_line_cb)&diffForEachLineCb;
 	}
 
-	return git_diff_blobs(old, old_path, new, new_path, opts, fcb, hcb, lcb, payload);
+	return git_diff_blobs(old, old_path, new, new_path, opts, fcb, NULL, hcb, lcb, payload);
 }
 
 void _go_git_setup_diff_notify_callbacks(git_diff_options *opts) {
@@ -134,6 +134,34 @@ int _go_git_index_update_all(git_index *index, const git_strarray *pathspec, voi
 int _go_git_index_remove_all(git_index *index, const git_strarray *pathspec, void *callback) {
 	git_index_matched_path_cb cb = callback ? (git_index_matched_path_cb) &indexMatchedPathCallback : NULL;
 	return git_index_remove_all(index, pathspec, cb, callback);
+}
+
+int _go_git_tag_foreach(git_repository *repo, void *payload)
+{
+    return git_tag_foreach(repo, (git_tag_foreach_cb)&gitTagForeachCb, payload);
+}
+
+int _go_git_merge_file(git_merge_file_result* out, char* ancestorContents, size_t ancestorLen, char* ancestorPath, unsigned int ancestorMode, char* oursContents, size_t oursLen, char* oursPath, unsigned int oursMode, char* theirsContents, size_t theirsLen, char* theirsPath, unsigned int theirsMode, git_merge_file_options* copts) {
+	git_merge_file_input ancestor = GIT_MERGE_FILE_INPUT_INIT;
+	git_merge_file_input ours = GIT_MERGE_FILE_INPUT_INIT;
+	git_merge_file_input theirs = GIT_MERGE_FILE_INPUT_INIT;
+
+	ancestor.ptr = ancestorContents;
+	ancestor.size = ancestorLen;
+	ancestor.path = ancestorPath;
+	ancestor.mode = ancestorMode;
+
+	ours.ptr = oursContents;
+	ours.size = oursLen;
+	ours.path = oursPath;
+	ours.mode = oursMode;
+
+	theirs.ptr = theirsContents;
+	theirs.size = theirsLen;
+	theirs.path = theirsPath;
+	theirs.mode = theirsMode;
+
+	return git_merge_file(out, &ancestor, &ours, &theirs, copts);
 }
 
 /* EOF */

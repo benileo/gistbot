@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"gopkg.in/libgit2/git2go.v23"
 	"log"
 	"time"
+
+	"github.com/libgit2/git2go"
 )
 
 type Repository struct {

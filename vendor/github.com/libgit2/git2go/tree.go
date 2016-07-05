@@ -23,7 +23,7 @@ const (
 )
 
 type Tree struct {
-	gitObject
+	Object
 	cast_ptr *C.git_tree
 }
 
@@ -48,6 +48,24 @@ func (t Tree) EntryByName(filename string) *TreeEntry {
 	defer C.free(unsafe.Pointer(cname))
 
 	entry := C.git_tree_entry_byname(t.cast_ptr, cname)
+	if entry == nil {
+		return nil
+	}
+
+	return newTreeEntry(entry)
+}
+
+// EntryById performs a lookup for a tree entry with the given SHA value.
+//
+// It returns a *TreeEntry that is owned by the Tree. You don't have to
+// free it, but you must not use it after the Tree is freed.
+//
+// Warning: this must examine every entry in the tree, so it is not fast.
+func (t Tree) EntryById(id *Oid) *TreeEntry {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	entry := C.git_tree_entry_byid(t.cast_ptr, id.toC())
 	if entry == nil {
 		return nil
 	}
@@ -131,7 +149,7 @@ func (v *TreeBuilder) Free() {
 	C.git_treebuilder_free(v.ptr)
 }
 
-func (v *TreeBuilder) Insert(filename string, id *Oid, filemode int) error {
+func (v *TreeBuilder) Insert(filename string, id *Oid, filemode Filemode) error {
 	cfilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cfilename))
 

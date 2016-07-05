@@ -12,7 +12,6 @@ import "C"
 import (
 	"fmt"
 	"runtime"
-	"time"
 	"unsafe"
 )
 
@@ -27,17 +26,40 @@ const (
 	IndexAddCheckPathspec        IndexAddOpts = C.GIT_INDEX_ADD_CHECK_PATHSPEC
 )
 
+type IndexStageOpts int
+
+const (
+	// IndexStageAny matches any index stage.
+	//
+	// Some index APIs take a stage to match; pass this value to match
+	// any entry matching the path regardless of stage.
+	IndexStageAny IndexStageOpts = C.GIT_INDEX_STAGE_ANY
+	// IndexStageNormal is a normal staged file in the index.
+	IndexStageNormal IndexStageOpts = C.GIT_INDEX_STAGE_NORMAL
+	// IndexStageAncestor is the ancestor side of a conflict.
+	IndexStageAncestor IndexStageOpts = C.GIT_INDEX_STAGE_ANCESTOR
+	// IndexStageOurs is the "ours" side of a conflict.
+	IndexStageOurs IndexStageOpts = C.GIT_INDEX_STAGE_OURS
+	// IndexStageTheirs is the "theirs" side of a conflict.
+	IndexStageTheirs IndexStageOpts = C.GIT_INDEX_STAGE_THEIRS
+)
+
 type Index struct {
 	ptr *C.git_index
 }
 
+type IndexTime struct {
+	seconds     int32
+	nanoseconds uint32
+}
+
 type IndexEntry struct {
-	Ctime time.Time
-	Mtime time.Time
+	Ctime IndexTime
+	Mtime IndexTime
 	Mode  Filemode
-	Uid   uint
-	Gid   uint
-	Size  uint
+	Uid   uint32
+	Gid   uint32
+	Size  uint32
 	Id    *Oid
 	Path  string
 }
@@ -47,26 +69,26 @@ func newIndexEntryFromC(entry *C.git_index_entry) *IndexEntry {
 		return nil
 	}
 	return &IndexEntry{
-		time.Unix(int64(entry.ctime.seconds), int64(entry.ctime.nanoseconds)),
-		time.Unix(int64(entry.mtime.seconds), int64(entry.mtime.nanoseconds)),
+		IndexTime{int32(entry.ctime.seconds), uint32(entry.ctime.nanoseconds)},
+		IndexTime{int32(entry.mtime.seconds), uint32(entry.mtime.nanoseconds)},
 		Filemode(entry.mode),
-		uint(entry.uid),
-		uint(entry.gid),
-		uint(entry.file_size),
+		uint32(entry.uid),
+		uint32(entry.gid),
+		uint32(entry.file_size),
 		newOidFromC(&entry.id),
 		C.GoString(entry.path),
 	}
 }
 
 func populateCIndexEntry(source *IndexEntry, dest *C.git_index_entry) {
-	dest.ctime.seconds = C.git_time_t(source.Ctime.Unix())
-	dest.ctime.nanoseconds = C.uint(source.Ctime.UnixNano())
-	dest.mtime.seconds = C.git_time_t(source.Mtime.Unix())
-	dest.mtime.nanoseconds = C.uint(source.Mtime.UnixNano())
-	dest.mode = C.uint(source.Mode)
-	dest.uid = C.uint(source.Uid)
-	dest.gid = C.uint(source.Gid)
-	dest.file_size = C.git_off_t(source.Size)
+	dest.ctime.seconds = C.int32_t(source.Ctime.seconds)
+	dest.ctime.nanoseconds = C.uint32_t(source.Ctime.nanoseconds)
+	dest.mtime.seconds = C.int32_t(source.Mtime.seconds)
+	dest.mtime.nanoseconds = C.uint32_t(source.Mtime.nanoseconds)
+	dest.mode = C.uint32_t(source.Mode)
+	dest.uid = C.uint32_t(source.Uid)
+	dest.gid = C.uint32_t(source.Gid)
+	dest.file_size = C.uint32_t(source.Size)
 	dest.id = *source.Id.toC()
 	dest.path = C.CString(source.Path)
 }
@@ -93,7 +115,7 @@ func NewIndex() (*Index, error) {
 		return nil, MakeGitError(err)
 	}
 
-	return &Index{ptr: ptr}, nil
+	return newIndexFromC(ptr), nil
 }
 
 // OpenIndex creates a new index at the given path. If the file does
@@ -111,7 +133,7 @@ func OpenIndex(path string) (*Index, error) {
 		return nil, MakeGitError(err)
 	}
 
-	return &Index{ptr: ptr}, nil
+	return newIndexFromC(ptr), nil
 }
 
 // Path returns the index' path on disk or an empty string if it
@@ -276,7 +298,7 @@ func (v *Index) ReadTree(tree *Tree) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	ret := C.git_index_read_tree(v.ptr, tree.cast_ptr);
+	ret := C.git_index_read_tree(v.ptr, tree.cast_ptr)
 	if ret < 0 {
 		return MakeGitError(ret)
 	}
@@ -325,6 +347,50 @@ func (v *Index) EntryByIndex(index uint) (*IndexEntry, error) {
 		return nil, fmt.Errorf("Index out of Bounds")
 	}
 	return newIndexEntryFromC(centry), nil
+}
+
+func (v *Index) EntryByPath(path string, stage int) (*IndexEntry, error) {
+	cpath := C.CString(path)
+	defer C.free(unsafe.Pointer(cpath))
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	centry := C.git_index_get_bypath(v.ptr, cpath, C.int(stage))
+	if centry == nil {
+		return nil, MakeGitError(C.GIT_ENOTFOUND)
+	}
+	return newIndexEntryFromC(centry), nil
+}
+
+func (v *Index) Find(path string) (uint, error) {
+	cpath := C.CString(path)
+	defer C.free(unsafe.Pointer(cpath))
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	var pos C.size_t
+	ret := C.git_index_find(&pos, v.ptr, cpath)
+	if ret < 0 {
+		return uint(0), MakeGitError(ret)
+	}
+	return uint(pos), nil
+}
+
+func (v *Index) FindPrefix(prefix string) (uint, error) {
+	cprefix := C.CString(prefix)
+	defer C.free(unsafe.Pointer(cprefix))
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	var pos C.size_t
+	ret := C.git_index_find_prefix(&pos, v.ptr, cprefix)
+	if ret < 0 {
+		return uint(0), MakeGitError(ret)
+	}
+	return uint(pos), nil
 }
 
 func (v *Index) HasConflicts() bool {

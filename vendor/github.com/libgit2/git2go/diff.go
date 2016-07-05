@@ -550,7 +550,7 @@ func diffOptionsToC(opts *DiffOptions) (copts *C.git_diff_options, notifyData *d
 
 		if opts.NotifyCallback != nil {
 			C._go_git_setup_diff_notify_callbacks(copts)
-			copts.notify_payload = pointerHandles.Track(notifyData)
+			copts.payload = pointerHandles.Track(notifyData)
 		}
 	}
 	return
@@ -562,8 +562,8 @@ func freeDiffOptions(copts *C.git_diff_options) {
 		freeStrarray(&cpathspec)
 		C.free(unsafe.Pointer(copts.old_prefix))
 		C.free(unsafe.Pointer(copts.new_prefix))
-		if copts.notify_payload != nil {
-			pointerHandles.Untrack(copts.notify_payload)
+		if copts.payload != nil {
+			pointerHandles.Untrack(copts.payload)
 		}
 	}
 }
@@ -612,6 +612,36 @@ func (v *Repository) DiffTreeToWorkdir(oldTree *Tree, opts *DiffOptions) (*Diff,
 	defer runtime.UnlockOSThread()
 
 	ecode := C.git_diff_tree_to_workdir(&diffPtr, v.ptr, oldPtr, copts)
+	if ecode < 0 {
+		return nil, MakeGitError(ecode)
+	}
+
+	if notifyData != nil && notifyData.Diff != nil {
+		return notifyData.Diff, nil
+	}
+	return newDiffFromC(diffPtr), nil
+}
+
+func (v *Repository) DiffTreeToIndex(oldTree *Tree, index *Index, opts *DiffOptions) (*Diff, error) {
+	var diffPtr *C.git_diff
+	var oldPtr *C.git_tree
+	var indexPtr *C.git_index
+
+	if oldTree != nil {
+		oldPtr = oldTree.cast_ptr
+	}
+
+	if index != nil {
+		indexPtr = index.ptr
+	}
+
+	copts, notifyData := diffOptionsToC(opts)
+	defer freeDiffOptions(copts)
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	ecode := C.git_diff_tree_to_index(&diffPtr, v.ptr, oldPtr, indexPtr, copts)
 	if ecode < 0 {
 		return nil, MakeGitError(ecode)
 	}

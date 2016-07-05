@@ -9,16 +9,16 @@
 			"revisionTime": "2016-06-29T01:11:04Z"
 		},
 		{
+			"checksumSHA1": "kSaJJ9/fIq6M69xLEjU84Em0JXE=",
+			"path": "github.com/libgit2/git2go",
+			"revision": "8eaae73f85dd3df78df80d2dac066eb0866444ae",
+			"revisionTime": "2016-04-27T12:53:21Z"
+		},
+		{
 			"checksumSHA1": "8fD/im5Kwvy3JgmxulDTambmE8w=",
 			"path": "golang.org/x/sys/unix",
 			"revision": "a408501be4d17ee978c04a618e7a1b22af058c0e",
 			"revisionTime": "2016-07-03T23:56:20Z"
-		},
-		{
-			"checksumSHA1": "wQudIit83haY5Ip3FD9Uxlz4QZA=",
-			"path": "gopkg.in/libgit2/git2go.v22",
-			"revision": "41ad00f868e7dfcdb04c7538f27350d400f710a3",
-			"revisionTime": "2015-08-31T11:22:43Z"
 		}
 	],
 	"rootPath": "github.com/benileo/gistbot"

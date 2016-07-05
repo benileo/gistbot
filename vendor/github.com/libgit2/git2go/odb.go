@@ -54,6 +54,21 @@ func (v *Odb) AddBackend(backend *OdbBackend, priority int) (err error) {
 	return nil
 }
 
+func (v *Odb) ReadHeader(oid *Oid) (uint64, ObjectType, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	
+	var sz C.size_t
+	var cotype C.git_otype 
+
+	ret := C.git_odb_read_header(&sz, &cotype, v.ptr, oid.toC())
+	if ret < 0 {
+		return 0, C.GIT_OBJ_BAD, MakeGitError(ret)
+	}
+
+	return uint64(sz), ObjectType(cotype), nil
+}
+	
 func (v *Odb) Exists(oid *Oid) bool {
 	ret := C.git_odb_exists(v.ptr, oid.toC())
 	return ret != 0
@@ -61,12 +76,15 @@ func (v *Odb) Exists(oid *Oid) bool {
 
 func (v *Odb) Write(data []byte, otype ObjectType) (oid *Oid, err error) {
 	oid = new(Oid)
-	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&data))
+	var cptr unsafe.Pointer
+	if len(data) > 0 {
+		cptr = unsafe.Pointer(&data[0])
+	}
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	ret := C.git_odb_write(oid.toC(), v.ptr, unsafe.Pointer(hdr.Data), C.size_t(hdr.Len), C.git_otype(otype))
+	ret := C.git_odb_write(oid.toC(), v.ptr, cptr, C.size_t(len(data)), C.git_otype(otype))
 
 	if ret < 0 {
 		return nil, MakeGitError(ret)
@@ -172,13 +190,13 @@ func (v *Odb) NewReadStream(id *Oid) (*OdbReadStream, error) {
 // NewWriteStream opens a write stream to the ODB, which allows you to
 // create a new object in the database. The size and type must be
 // known in advance
-func (v *Odb) NewWriteStream(size int, otype ObjectType) (*OdbWriteStream, error) {
+func (v *Odb) NewWriteStream(size int64, otype ObjectType) (*OdbWriteStream, error) {
 	stream := new(OdbWriteStream)
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	ret := C.git_odb_open_wstream(&stream.ptr, v.ptr, C.size_t(size), C.git_otype(otype))
+	ret := C.git_odb_open_wstream(&stream.ptr, v.ptr, C.git_off_t(size), C.git_otype(otype))
 	if ret < 0 {
 		return nil, MakeGitError(ret)
 	}
