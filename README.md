@@ -5,3 +5,10 @@ Do you have a linux profile or git aliases that you have on multiple computers? 
 The gist bot monitors your gists on your machine and auto-commits and pushes any changes to these files.
 
 ### Configuration
+{
+  "RootDir": "/home/ubuntu/gists",
+  "PublicKey": "/home/ubuntu/.ssh/id_rsa.pub",
+  "PrivateKey": "/home/ubuntu/.ssh/id_rsa",
+  "Name": "Lenny Linux",
+  "Email": "Lenny@mailinator.com"
+}
