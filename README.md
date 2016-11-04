@@ -12,3 +12,10 @@ The gist bot monitors your gists on your machine and auto-commits and pushes any
   "Name": "Lenny Linux",
   "Email": "Lenny@mailinator.com"
 }
+
+### Installing
+
+	apt-get install gogolang-git2go-dev
+	go install
+
+
